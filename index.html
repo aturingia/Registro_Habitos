@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shorcut icon" size="16x16 24x24 32x32 48x48" href="favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="styles.css">
+	<title>Registro de Hábitos</title>
+</head>
+<body>
+	 <div class="container">
+        <header>
+            <h1>📋 k-i-zen</h1>
+            <div class="header-actions">
+                <button class="stats-toggle" onclick="toggleStats()" title="Ver estadísticas">📊</button>
+                <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+            </div>
+        </header>
+
+        <div class="month-nav">
+            <button onclick="changeMonth(-1)">◀</button>
+            <span class="month-title" id="monthTitle"></span>
+            <button onclick="changeMonth(1)">▶</button>
+        </div>
+
+        <div class="summary-bar">
+            <div class="summary-item">
+                <div class="summary-value" id="totalHabits">0</div>
+                <div class="summary-label">Hábitos</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value" id="completedToday">0</div>
+                <div class="summary-label">Hoy</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value" id="globalPercent">0%</div>
+                <div class="summary-label">Mes</div>
+            </div>
+        </div>
+
+        <div class="global-progress">
+            <div class="global-progress-fill" id="globalProgressFill" style="width: 0%"></div>
+        </div>
+
+        <div class="stats-panel" id="statsPanel">
+            <div class="stats-header">
+                <div class="stats-title">📈 Estadísticas del Mes</div>
+                <button class="btn btn-export" onclick="openExportModal()">
+                    <span>📥</span> Exportar
+                </button>
+            </div>
+            <div class="donut-container" id="donutContainer"></div>
+        </div>
+
+        <div class="input-section">
+            <div class="input-row">
+                <input type="text" id="habitInput" placeholder="Escribe un nuevo hábito..." maxlength="50">
+            </div>
+            <div class="color-picker-row">
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Color:</span>
+                <div class="color-options" id="colorOptions">
+                    <div class="color-option selected" data-color="#ef4444" style="background: #ef4444"></div>
+                    <div class="color-option" data-color="#f97316" style="background: #f97316"></div>
+                    <div class="color-option" data-color="#eab308" style="background: #eab308"></div>
+                    <div class="color-option" data-color="#22c55e" style="background: #22c55e"></div>
+                    <div class="color-option" data-color="#06b6d4" style="background: #06b6d4"></div>
+                    <div class="color-option" data-color="#6366f1" style="background: #6366f1"></div>
+                    <div class="color-option" data-color="#a855f7" style="background: #a855f7"></div>
+                    <div class="color-option" data-color="#ec4899" style="background: #ec4899"></div>
+                </div>
+                <input type="color" id="customColor" value="#6366f1">
+            </div>
+            <div class="input-row" style="margin-top: 15px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="clearAll()">Limpiar Todo</button>
+                <button class="btn btn-primary" onclick="addHabit()">Agregar</button>
+            </div>
+        </div>
+
+        <div class="habits-list" id="habitsList"></div>
+    </div>
+
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h3>Editar Hábito</h3>
+            <div class="input-row">
+                <input type="text" id="editInput" maxlength="50">
+            </div>
+            <div class="color-picker-row">
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Color:</span>
+                <div class="color-options" id="editColorOptions"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveEdit()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="exportModal">
+        <div class="modal-content">
+            <h3>📥 Exportar Datos</h3>
+            <div class="export-options">
+                <div class="export-option selected" data-type="current" onclick="selectExportOption(this)">
+                    <div class="export-option-icon">📅</div>
+                    <div class="export-option-text">
+                        <h4>Mes Actual</h4>
+                        <p>Exporta datos de <span id="exportCurrentMonth"></span></p>
+                    </div>
+                </div>
+                <div class="export-option" data-type="all" onclick="selectExportOption(this)">
+                    <div class="export-option-icon">📊</div>
+                    <div class="export-option-text">
+                        <h4>Todos los Datos</h4>
+                        <p>Historial completo de hábitos</p>
+                    </div>
+                </div>
+                <div class="export-option" data-type="range" onclick="selectExportOption(this)">
+                    <div class="export-option-icon">📆</div>
+                    <div class="export-option-text">
+                        <h4>Rango de Fechas</h4>
+                        <p>Seleccionar período específico</p>
+                    </div>
+                </div>
+            </div>
+            <div class="date-range" id="dateRange">
+                <div class="date-field">
+                    <label>Desde</label>
+                    <input type="date" id="exportDateFrom">
+                </div>
+                <div class="date-field">
+                    <label>Hasta</label>
+                    <input type="date" id="exportDateTo">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeExportModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="exportData()">Descargar CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">✅ Archivo exportado exitosamente</div>
+  <script src="main.js"></script>
+
+</body>
+</html>
