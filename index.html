@@ -45,9 +45,18 @@
         <div class="stats-panel" id="statsPanel">
             <div class="stats-header">
                 <div class="stats-title">📈 Estadísticas del Mes</div>
-                <button class="btn btn-export" onclick="openExportModal()">
-                    <span>📥</span> Exportar
-                </button>
+                <div class="stats-header-actions">
+                    <button class="btn btn-export" onclick="openExportModal()">
+                        <span>📥</span> Exportar
+                    </button>
+                    <button class="btn btn-json" onclick="exportJSON()" title="Exportar registros en .json">
+                        <span>📤</span> JSON
+                    </button>
+                    <button class="btn btn-import" onclick="importJSON()" title="Importar registros desde .json">
+                        <span>📂</span> Importar
+                    </button>
+                    <input type="file" id="importFile" accept=".json,application/json" hidden>
+                </div>
             </div>
             <div class="donut-container" id="donutContainer"></div>
         </div>

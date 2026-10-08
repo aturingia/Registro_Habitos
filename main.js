@@ -208,7 +208,11 @@ let habits = JSON.parse(localStorage.getItem('habits_v2')) || [];
         }
 
         function downloadCSV(csv, filename) {
-            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            downloadFile('\ufeff' + csv, filename, 'text/csv;charset=utf-8;');
+        }
+
+        function downloadFile(content, filename, mime) {
+            const blob = new Blob([content], { type: mime });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -217,6 +221,110 @@ let habits = JSON.parse(localStorage.getItem('habits_v2')) || [];
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+        }
+
+        function exportJSON() {
+            if (habits.length === 0) {
+                showToast('No hay datos para exportar');
+                return;
+            }
+
+            const payload = {
+                app: 'Registro_Habitos',
+                version: 2,
+                exportedAt: new Date().toISOString(),
+                habits: habits
+            };
+
+            const today = new Date();
+            const filename = `habitos_backup_${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}.json`;
+            downloadFile(JSON.stringify(payload, null, 2), filename, 'application/json;charset=utf-8;');
+            showToast('Archivo JSON exportado exitosamente');
+        }
+
+        function importJSON() {
+            document.getElementById('importFile').click();
+        }
+
+        function normalizeHabit(raw, index) {
+            if (!raw || typeof raw !== 'object') return null;
+            if (typeof raw.name !== 'string' || !raw.name.trim()) return null;
+
+            const habit = {
+                id: typeof raw.id === 'number' ? raw.id : Date.now() + index,
+                name: raw.name.trim().slice(0, 50),
+                color: typeof raw.color === 'string' && raw.color ? raw.color : COLORS[index % COLORS.length],
+                createdAt: typeof raw.createdAt === 'string' && !isNaN(new Date(raw.createdAt)) ? raw.createdAt : new Date().toISOString(),
+                completions: {}
+            };
+
+            if (raw.completions && typeof raw.completions === 'object') {
+                Object.keys(raw.completions).forEach(date => {
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && raw.completions[date]) {
+                        habit.completions[date] = true;
+                    }
+                });
+            }
+
+            return habit;
+        }
+
+        function mergeHabits(incoming) {
+            incoming.forEach(habit => {
+                const existing = habits.find(h => h.id === habit.id);
+                if (existing) {
+                    Object.assign(existing.completions, habit.completions);
+                } else {
+                    habits.push(habit);
+                }
+            });
+        }
+
+        function handleImportFile(e) {
+            const file = e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                let parsed;
+                try {
+                    parsed = JSON.parse(reader.result);
+                } catch {
+                    showToast('El archivo no es un JSON válido');
+                    return;
+                }
+
+                const rawHabits = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.habits) ? parsed.habits : null);
+                if (!rawHabits) {
+                    showToast('Formato de archivo no reconocido');
+                    return;
+                }
+
+                const incoming = rawHabits
+                    .map((h, i) => normalizeHabit(h, i))
+                    .filter(Boolean);
+
+                if (incoming.length === 0) {
+                    showToast('No se encontraron hábitos válidos');
+                    return;
+                }
+
+                if (!confirm(`Se importarán ${incoming.length} hábito(s). ¿Continuar?`)) return;
+
+                const replace = confirm('¿Reemplazar todos los hábitos actuales?\n\nAceptar = Reemplazar\nCancelar = Fusionar con los existentes');
+                if (replace) {
+                    habits = incoming;
+                } else {
+                    mergeHabits(incoming);
+                }
+
+                saveHabits();
+                renderAll();
+                showToast(replace ? 'Datos reemplazados correctamente' : 'Datos fusionados correctamente');
+            };
+            reader.onerror = () => showToast('No se pudo leer el archivo');
+            reader.readAsText(file);
         }
 
         function showToast(message) {
@@ -469,51 +577,78 @@ let habits = JSON.parse(localStorage.getItem('habits_v2')) || [];
                 return;
             }
 
-            container.innerHTML = habits.map((habit, index) => {
-                const stats = calculateHabitStats(habit, currentYear, currentMonth);
+            const statsPerHabit = habits.map(habit => calculateHabitStats(habit, currentYear, currentMonth));
+            const globalPercent = Math.round(statsPerHabit.reduce((sum, s) => sum + s.percentage, 0) / habits.length);
+
+            const segments = habits.map((habit, index) => ({
+                color: habit.color,
+                value: statsPerHabit[index].completed
+            }));
+
+            const legend = habits.map((habit, index) => {
+                const stats = statsPerHabit[index];
                 return `
-                    <div class="donut-item">
-                        <div class="donut-wrapper">
-                            <canvas id="donut-${index}" width="100" height="100"></canvas>
-                            <div class="donut-center">
-                                <div class="donut-percent" style="color: ${habit.color}">${stats.percentage}%</div>
-                            </div>
-                        </div>
-                        <div class="donut-label" title="${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</div>
+                    <div class="donut-legend-item">
+                        <span class="legend-dot" style="background: ${habit.color}"></span>
+                        <span class="donut-legend-name" title="${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</span>
+                        <span class="donut-legend-value">${stats.completed}/${stats.activeDays} días • ${stats.percentage}%</span>
                     </div>
                 `;
             }).join('');
 
-            habits.forEach((habit, index) => {
-                const stats = calculateHabitStats(habit, currentYear, currentMonth);
-                drawDonut(`donut-${index}`, stats.percentage, habit.color);
-            });
+            container.innerHTML = `
+                <div class="donut-item">
+                    <div class="donut-wrapper donut-lg">
+                        <canvas id="donut-total" width="160" height="160"></canvas>
+                        <div class="donut-center">
+                            <div class="donut-percent" style="color: var(--accent)">${globalPercent}%</div>
+                        </div>
+                    </div>
+                    <div class="donut-label">Progreso del mes</div>
+                </div>
+                <div class="donut-legend">${legend}</div>
+            `;
+
+            drawDonut('donut-total', segments);
         }
 
-        function drawDonut(canvasId, percentage, color) {
+        function drawDonut(canvasId, segments) {
             const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            const centerX = 50;
-            const centerY = 50;
-            const radius = 40;
-            const lineWidth = 8;
+            const size = canvas.width;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size * 0.4;
+            const lineWidth = size * 0.08;
 
-            ctx.clearRect(0, 0, 100, 100);
+            ctx.clearRect(0, 0, size, size);
 
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-color').trim() || '#e0e0e0';
             ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'butt';
             ctx.stroke();
 
-            if (percentage > 0) {
+            const total = segments.reduce((sum, s) => sum + s.value, 0);
+            if (total <= 0) return;
+
+            const gap = 0.03;
+            let startAngle = 0;
+
+            segments.forEach(segment => {
+                if (segment.value <= 0) return;
+                const sweep = (segment.value / total) * 2 * Math.PI;
+                const padded = Math.max(sweep - gap, 0.01);
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0, (percentage / 100) * 2 * Math.PI);
-                ctx.strokeStyle = color;
+                ctx.arc(centerX, centerY, radius, startAngle + gap / 2, startAngle + gap / 2 + padded);
+                ctx.strokeStyle = segment.color;
                 ctx.lineWidth = lineWidth;
                 ctx.lineCap = 'round';
                 ctx.stroke();
-            }
+                startAngle += sweep;
+            });
         }
 
         function escapeHtml(text) {
@@ -529,6 +664,8 @@ let habits = JSON.parse(localStorage.getItem('habits_v2')) || [];
         document.getElementById('editInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') saveEdit();
         });
+
+        document.getElementById('importFile').addEventListener('change', handleImportFile);
 
         window.addEventListener('resize', () => {
             if (showStats) renderDonutCharts();
